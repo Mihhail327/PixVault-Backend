@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual env
+venv/
+.env/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Docker volumes (если вдруг создашь локально)
+images/
+logs/
+
+# Tests cache
+.pytest_cache/
+.coverage
+
+# OS files
+.DS_Store
+Thumbs.db
