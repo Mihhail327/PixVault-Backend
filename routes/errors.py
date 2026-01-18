@@ -1,5 +1,5 @@
 from flask import jsonify, request
-from core import log_error, log_request
+from core.logging import log_error, log_request
 
 
 class PixVaultError(Exception):
