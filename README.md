@@ -41,7 +41,10 @@ pixvault-backend/
 │   ├── test_security.py
 │   └── test_storage.py
 │
-├── Dockerfile          # Бэкенд
+├── docker/                 # Docker конфигурации
+│   ├── Dockerfile          # Бэкенд
+│   ├── nginx.conf          # Nginx конфиг
+│   └── compose.yaml        # Docker Compose
 │
 ├── images/                 # Volume: загруженные изображения
 ├── logs/                   # Volume: логи и аудит
@@ -119,8 +122,8 @@ make test
 PixVault полностью контейнеризован:
 
 - `docker/Dockerfile` — backend  
-
-
+- `docker/nginx.conf` — reverse proxy  
+- `docker/compose.yaml` — запуск через `make docker-run`
 
 ## 🛠 Makefile
 
