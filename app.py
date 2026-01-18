@@ -32,3 +32,7 @@ def create_app():
 
 # Экземпляр приложения (используется index.py)
 app = create_app()
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
