@@ -1,5 +1,5 @@
 import config
-from core.validation import is_allowed_extension, validate_size
+from core import is_allowed_extension, validate_size
 
 
 

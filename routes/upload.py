@@ -1,27 +1,38 @@
-from flask import request, jsonify
-from core.file_service import save_uploaded_file
+from flask import Blueprint, request, jsonify
+from core.file_service import save_image
+from core.logging import log_request, log_error
+from core.security import sanitize_payload
 
-def handle_upload():
-    """
-    Post /upload
-    Ожидает multipart/from-data с полем 'file'
-    """
+upload_bp = Blueprint("upload", __name__)
+
+
+@upload_bp.route("/upload", methods=["POST"])
+def upload_image():
+    # Логируем входящий запрос
+    log_request(request)
+
+    # Проверяем, что файл передан
     if "file" not in request.files:
-        return jsonify({"error": "Поле 'file' отсутствует"}), 400
+        log_error("No file in request")
+        return jsonify({"error": "No file provided"}), 400
 
     file = request.files["file"]
 
-    if file.filename == "":
-        return jsonify({"error": "Файл не выбран"}), 400
+    # Санитизация дополнительных данных (если есть)
+    payload = sanitize_payload(request.form.to_dict())
+
+    # В реальном проекте user_id берётся из токена
+    user_id = payload.get("user_id", 0)
 
     try:
-        file_id = save_uploaded_file(file.filename, file.read())
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception:
-        return jsonify({"error": "Ошибка сервера при загрузке файла"}), 500
+        # Сохранение изображения
+        filename = save_image(file, user_id)
 
-    return jsonify({
-        "status": "success",
-        "id":file_id
-    })
+        return jsonify({
+            "status": "ok",
+            "file_id": filename
+        }), 200
+
+    except Exception as exc:
+        log_error("Upload failed", error=str(exc))
+        return jsonify({"error": str(exc)}), 400

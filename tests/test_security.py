@@ -1,5 +1,5 @@
 import re
-from core.security import sanitize_filename, generate_secure_filename, audit
+from core import sanitize_filename, generate_secure_filename, audit
 
 def test_sanitize_filename_basic():
     """

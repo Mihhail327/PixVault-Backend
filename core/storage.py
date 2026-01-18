@@ -1,58 +1,99 @@
 import os
-from config import IMAGES_DIR
-from core.logging import logger
+from typing import Optional, BinaryIO
 
-# Создание директории хранения
-os.makedirs(IMAGES_DIR, exist_ok=True)
+from core.logging import log_info, log_error
+from core.security import safe_filename, safe_path
 
-def safe_join(base: str, *path: str) -> str:
+
+STORAGE_DIR = "images"
+
+
+# === Инициализация хранилища ===
+
+def init_storage():
     """
-    Безопасное объединение путей.
-    Защищает от path traversal атак:
-        ../../../etc/passwd
+    Создаёт директорию для хранения файлов, если её нет.
     """
-    final_path = os.path.abspath(os.path.join(base, *path))
-    base_path = os.path.abspath(base)
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    log_info("Storage initialized", directory=STORAGE_DIR)
 
-    if not final_path.startswith(base_path):
-        raise ValueError("Попытка выхода за пределы директории хранения")
-    return final_path
 
-def save_file(filename: str, data: bytes) -> str:
+# === Путь к файлу ===
+
+def get_path(filename: str) -> str:
     """
-    Сохраняет файл в директорию IMAGES_DIR.
-    Возвращает полный путь к файлу
+    Возвращает безопасный путь к файлу в хранилище.
     """
-    filepath = safe_join(IMAGES_DIR, filename)
+    filename = safe_filename(filename)
+    return safe_path(os.path.join(STORAGE_DIR, filename))
 
-    with open(filepath, "wb") as f:
-        f.write(data)
 
-    logger.info(f"Файл сохранён: {filepath}")
-    return filepath
+# === Проверка существования ===
 
-def delete_file(filename: str) -> bool:
+def exists(filename: str) -> bool:
     """
-    Удаляет файл по имению
-    Возвращает True, если файл удалён.
+    Проверяет, существует ли файл.
     """
-    filepath = safe_join(IMAGES_DIR, filename)
+    path = get_path(filename)
+    return os.path.exists(path)
 
-    if os.path.exists(filename):
-        os.remove(filepath)
-        logger.info(f"Файл удалён: {filepath}")
+
+# === Сохранение файла ===
+
+def save(filename: str, data: BinaryIO) -> str:
+    """
+    Сохраняет бинарные данные в файл.
+    data — это BytesIO или любой поток с .read().
+    """
+    path = get_path(filename)
+
+    with open(path, "wb") as f:
+        f.write(data.read())
+
+    log_info("File saved", filename=filename, path=path)
+    return filename
+
+
+# === Чтение файла ===
+
+def load(filename: str) -> Optional[bytes]:
+    """
+    Загружает файл и возвращает его содержимое.
+    """
+    path = get_path(filename)
+
+    if not os.path.exists(path):
+        log_error("Attempt to load non-existing file", filename=filename)
+        return None
+
+    with open(path, "rb") as f:
+        return f.read()
+
+
+# === Удаление файла ===
+
+def delete(filename: str) -> bool:
+    """
+    Удаляет файл. Возвращает True, если файл был удалён.
+    """
+    path = get_path(filename)
+
+    if not os.path.exists(path):
+        log_error("Attempt to delete non-existing file", filename=filename)
+        return False
+
+    os.remove(path)
+    log_info("File deleted", filename=filename)
     return True
 
-def file_exists(filename: str) -> bool:
-    """
-    Проверяем существование файла.
-    """
-    filepath = safe_join(IMAGES_DIR, filename)
-    return os.path.exists(filepath)
 
-def get_file_path(filename: str) -> str:
+# === Список файлов ===
+
+def list_files() -> list[str]:
     """
-    Возвращает абсолютный путь к файлу.
-    Используется для отдачи файла по ID.
+    Возвращает список всех файлов в хранилище.
     """
-    return safe_join(IMAGES_DIR, filename)
+    return [
+        f for f in os.listdir(STORAGE_DIR)
+        if os.path.isfile(os.path.join(STORAGE_DIR, f))
+    ]

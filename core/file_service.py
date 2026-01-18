@@ -1,120 +1,94 @@
-import mimetypes
-from core.storage import save_file, delete_file, file_exists, get_file_path
-from core.security import generate_secure_filename, sanitize_filename, audit
-from core.validation import is_allowed_extension, validate_size
-from config import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+import uuid
+from io import BytesIO
+from PIL import Image
+
+from core.storage import save as storage_save
+from core.storage import delete as storage_delete
+from core.storage import get_path as storage_get_path
+from core.validation import validate_extension, validate_size
+from core.logging import log_upload, log_error
 
 
-# -----------------------------
-# Временная база данных (in-memory)
-# Позже заменим на SQLite/Postgres
-# -----------------------------
-FILES_DB = {}
-NEXT_ID = 1
+# === Генерация безопасного имени файла ===
 
-
-def create_file_record(original_name: str, stored_name: str, size: int, mime: str) -> int:
+def generate_filename(ext: str) -> str:
     """
-    Создаёт запись о файле и возвращает ID.
+    Генерирует безопасное случайное имя файла.
+    Пример: 4f8c2a9e3d124e8c9b7f2a3c4d5e6f7a.webp
     """
-    global NEXT_ID
-
-    file_id = NEXT_ID
-    NEXT_ID += 1
-
-    FILES_DB[file_id] = {
-        "id": file_id,
-        "original_name": original_name,
-        "stored_name": stored_name,
-        "size": size,
-        "mime": mime
-    }
-
-    return file_id
+    return f"{uuid.uuid4().hex}.{ext.lower()}"
 
 
-def save_uploaded_file(original_name: str, data: bytes) -> int:
+# === Обработка изображения ===
+
+def process_image(file_storage) -> BytesIO:
     """
-    Полный цикл сохранения файла:
-    - санитизация имени
-    - проверка расширения
-    - проверка размера
-    - генерация безопасного имени
-    - сохранение файла
-    - запись в базу
-    - аудит
+    Приводит изображение к безопасному формату:
+    - конвертация в RGB
+    - ресайз до 2048x2048
+    - сохранение в WebP
+    """
+    img = Image.open(file_storage)
+    img = img.convert("RGB")
+    img.thumbnail((2048, 2048))
+
+    buffer = BytesIO()
+    img.save(buffer, format="WEBP", quality=90)
+    buffer.seek(0)
+
+    return buffer
+
+
+# === Основная функция сохранения ===
+
+def save_image(file_storage, user_id: int) -> str:
+    """
+    Принимает файл из Flask (werkzeug FileStorage),
+    валидирует, обрабатывает и сохраняет его.
+    Возвращает итоговое имя файла.
     """
 
-    # Санитизация
-    safe_name = sanitize_filename(original_name)
+    original_name = file_storage.filename
 
-    # Проверка расширения
-    if not is_allowed_extension(safe_name, ALLOWED_EXTENSIONS):
-        audit("upload_error", {"reason": "bad_extension", "name": safe_name})
-        raise ValueError("Неподдерживаемый формат файла")
+    # 1. Проверка расширения
+    validate_extension(original_name)
 
-    # Проверка размера
-    if not validate_size(len(data), MAX_FILE_SIZE):
-        audit("upload_error", {"reason": "file_too_large", "size": len(data)})
-        raise ValueError("Файл слишком большой")
+    # 2. Проверка размера (например, 10 MB)
+    validate_size(file_storage, max_mb=10)
 
-    # Генерация безопасного имени
-    ext = "." + safe_name.split(".")[-1]
-    stored_name = generate_secure_filename(ext)
+    # 3. Генерация безопасного имени
+    ext = original_name.rsplit(".", 1)[-1]
+    filename = generate_filename(ext)
 
-    # Сохранение файла
-    save_file(stored_name, data)
+    # 4. Обработка изображения
+    processed = process_image(file_storage)
 
-    # MIME
-    mime = mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+    # 5. Сохранение в хранилище
+    storage_save(filename, processed)
 
-    # Создание записи
-    file_id = create_file_record(
-        original_name=safe_name,
-        stored_name=stored_name,
-        size=len(data),
-        mime=mime
-    )
+    # 6. Логирование
+    log_upload(filename, user_id)
 
-    audit("upload_success", {"id": file_id, "stored_name": stored_name})
-    return file_id
+    return filename
 
 
-def get_file_info(file_id: int) -> dict | None:
+# === Удаление изображения ===
+
+def delete_image(filename: str) -> bool:
     """
-    Возвращает запись о файле по ID.
+    Удаляет изображение по имени файла.
     """
-    return FILES_DB.get(file_id)
-
-
-def get_file_bytes(file_id: int) -> tuple[bytes, str]:
-    """
-    Возвращает (байты файла, MIME) по ID.
-    """
-    record = get_file_info(file_id)
-    if not record:
-        raise FileNotFoundError("Файл не найден")
-
-    path = get_file_path(record["stored_name"])
-
-    with open(path, "rb") as f:
-        data = f.read()
-
-    return data, record["mime"]
-
-
-def delete_file_by_id(file_id: int) -> bool:
-    """
-    Удаляет файл по ID:
-    - удаляет физический файл
-    - удаляет запись из базы
-    """
-    record = get_file_info(file_id)
-    if not record:
+    try:
+        return storage_delete(filename)
+    except Exception as exc:
+        log_error("Failed to delete image", filename=filename, error=str(exc))
         return False
 
-    delete_file(record["stored_name"])
-    del FILES_DB[file_id]
 
-    audit("delete_success", {"id": file_id})
-    return True
+# === Получение пути ===
+
+def get_image_path(filename: str) -> str:
+    """
+    Возвращает безопасный путь к изображению.
+    """
+    return storage_get_path(filename)
