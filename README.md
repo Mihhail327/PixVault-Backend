@@ -41,10 +41,7 @@ pixvault-backend/
 │   ├── test_security.py
 │   └── test_storage.py
 │
-├── docker/                 # Docker конфигурации
-│   ├── Dockerfile          # Бэкенд
-│   ├── nginx.conf          # Nginx конфиг
-│   └── compose.yaml        # Docker Compose
+├── Dockerfile          # Бэкенд
 │
 ├── images/                 # Volume: загруженные изображения
 ├── logs/                   # Volume: логи и аудит
