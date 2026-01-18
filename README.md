@@ -119,8 +119,7 @@ make test
 PixVault полностью контейнеризован:
 
 - `docker/Dockerfile` — backend  
-- `docker/nginx.conf` — reverse proxy  
-- `docker/compose.yaml` — запуск через `make docker-run`
+
 
 ## 🛠 Makefile
 
