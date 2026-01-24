@@ -1,29 +1,25 @@
-# Python
+# Python & Bytecode
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 *.log
 
-# Virtual env
+# Environments
+.env
+.venv
 venv/
-.venv/
-.env/
+ENV/
 
-# VS Code
+# Project Specific (PixVault)
+uploads/
+backups/
+instance/
+*.db
+
+# IDEs
 .vscode/
-
-# PyCharm
 .idea/
 
-# Docker volumes (если вдруг создашь локально)
-images/
-logs/
-
-# Tests cache
-.pytest_cache/
-.coverage
-
-# OS files
+# System
 .DS_Store
 Thumbs.db

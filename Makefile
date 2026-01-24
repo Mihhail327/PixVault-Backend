@@ -1,56 +1,55 @@
-# Имя проекта
-PROJECT = pixvault
+# Получаем версию из pyproject.toml
+VERSION := $(shell poetry version -s)
+IMAGE_NAME := pixvault-backend
+# Полное имя образа с тегом
+IMAGE := $(IMAGE_NAME):$(VERSION)
+# Имя для latest (удобно для локальных тестов)
+IMAGE_LATEST := $(IMAGE_NAME):latest
 
-# Основные команды Docker Compose
-DC = docker compose
+# Папка для загрузок на хосте и в контейнере
+UPLOAD_DIR_HOST := $(PWD)/uploads
+UPLOAD_DIR_CONTAINER := /app/uploads
 
-# === Запуск приложения ===
+# --- Docker ---
 
-run:
-	$(DC) up --build
-
-up:
-	$(DC) up -d
-
-down:
-	$(DC) down
-
-restart:
-	$(DC) down
-	$(DC) up -d
-
-# === Логи ===
-
-logs:
-	$(DC) logs -f
-
-# === Пересборка ===
-
+# Сборка Docker-образа с семантической версией
 build:
-	$(DC) build
+	@echo "Building version: $(VERSION)"
+	docker build -t $(IMAGE) .
+	docker tag $(IMAGE) $(IMAGE_LATEST)
 
+# Запуск контейнера с пробросом папки загрузок
+run:
+	docker run -p 8000:8000 \
+		--name pixvault_server \
+		--env-file .env \
+		-v $(UPLOAD_DIR_HOST):$(UPLOAD_DIR_CONTAINER) \
+		$(IMAGE_LATEST)
+
+# Пересборка
 rebuild:
-	$(DC) down
-	$(DC) build --no-cache
-	$(DC) up -d
+	docker build --no-cache -t $(IMAGE) .
+	docker tag $(IMAGE) $(IMAGE_LATEST)
 
-# === Очистка ===
-
-clean:
-	$(DC) down --volumes --remove-orphans
-
-prune:
-	docker system prune -af
-
-# === Тесты ===
-
-test:
-	$(DC) exec app pytest -q
-
-# === Утилиты ===
-
+# Интерактивный режим
 shell:
-	$(DC) exec app sh
+	docker run -it --entrypoint /bin/bash $(IMAGE_LATEST)
 
-bash:
-	$(DC) exec app bash
+# Очистка (удаляем и версию, и latest)
+clean:
+	docker rmi $(IMAGE) $(IMAGE_LATEST)
+
+# --- Database & App ---
+
+db-init:
+	poetry run flask --app pixvault_backend.app:create_app db init
+
+db-migrate:
+	poetry run flask --app pixvault_backend.app:create_app db migrate -m "auto"
+
+# Исправлена опечатка (creat_app -> create_app) и имя цели (db_upgrade -> db-upgrade)
+db-upgrade:
+	poetry run flask --app pixvault_backend.app:create_app db upgrade
+
+dev:
+	poetry run flask --app pixvault_backend.app:create_app run --host=0.0.0.0 --port=8000
